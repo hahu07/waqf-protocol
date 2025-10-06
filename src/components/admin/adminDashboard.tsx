@@ -6,7 +6,11 @@ import { Button } from '@/components/ui/button';
 import { FaUsers, FaLandmark, FaFileAlt, FaCog } from 'react-icons/fa';
 import { Badge } from '@/components/ui/badge';
 import { useFetchWaqfData } from '@/hooks/useWaqfData';
+import { useRecentActivities } from '@/hooks/useRecentActivities';
 import { useRouter } from 'next/navigation';
+import { logActivity } from '@/lib/activity-utils';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { useEffect } from 'react';
 import type { AdminManagerProps } from './types';
 
 type StatCard = {
@@ -25,7 +29,23 @@ type ActivityItem = {
 
 export const AdminDashboard: React.FC<AdminManagerProps> = () => {
   const router = useRouter();
+  const { user } = useAuth();
   const { waqf, causes, assets, allocations, loading, error } = useFetchWaqfData();
+  const { activities: recentActivity, loading: activitiesLoading, error: activitiesError, refetch: refetchActivities } = useRecentActivities(5);
+  
+  // Log dashboard access activity
+  useEffect(() => {
+    if (user?.key) {
+      logActivity(
+        'login_activity',
+        user.key,
+        'Admin User', // You could get the actual name from user profile
+        {
+          targetName: 'Admin Dashboard'
+        }
+      );
+    }
+  }, [user?.key]);
 
   // Real data metrics
   const totalCauses = causes?.length || 0;
@@ -64,26 +84,7 @@ export const AdminDashboard: React.FC<AdminManagerProps> = () => {
     },
   ];
 
-  const recentActivity: ActivityItem[] = [
-    {
-      id: '1',
-      user: 'Omar Ibn Khattab',
-      action: 'created new waqf asset',
-      time: '2 minutes ago'
-    },
-    {
-      id: '2',
-      user: 'Admin User',
-      action: 'approved report #123',
-      time: '15 minutes ago'
-    },
-    {
-      id: '3',
-      user: 'System',
-      action: 'performed nightly backup',
-      time: '1 hour ago'
-    },
-  ];
+  // Recent activity data is now fetched dynamically via useRecentActivities hook
 
   const quickActions = [
     { label: 'Manage Users', icon: <FaUsers className="h-5 w-5" />, href: '/admin/users' },
@@ -307,30 +308,90 @@ export const AdminDashboard: React.FC<AdminManagerProps> = () => {
 
       {/* Recent Activity */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900">Recent Activity</h2>
+          <button
+            onClick={refetchActivities}
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200 flex items-center gap-1"
+            disabled={activitiesLoading}
+          >
+            {activitiesLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </>
+            )}
+          </button>
         </div>
         <div className="p-6">
-          <div className="space-y-4">
-            {recentActivity.map((activity, index) => (
-              <div 
-                key={activity.id} 
-                className="flex items-start gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-              >
-                <div 
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #2563eb, #9333ea)' }}
-                >
-                  {activity.user.charAt(0)}
+          {activitiesLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-start gap-4 p-4 rounded-lg">
+                  <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse flex-shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-3 w-48 bg-gray-200 rounded animate-pulse" />
+                  </div>
+                  <div className="h-3 w-16 bg-gray-200 rounded animate-pulse" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">{activity.user}</p>
-                  <p className="text-sm text-gray-600">{activity.action}</p>
-                </div>
-                <div className="text-sm text-gray-500 flex-shrink-0">{activity.time}</div>
+              ))}
+            </div>
+          ) : activitiesError ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">⚠️</span>
               </div>
-            ))}
-          </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Unable to Load Activities</h3>
+              <p className="text-gray-600 mb-4">{activitiesError}</p>
+              <button
+                onClick={refetchActivities}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : recentActivity.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">📝</span>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Recent Activity</h3>
+              <p className="text-gray-600">Activity will appear here as users interact with the platform</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {recentActivity.map((activity, index) => (
+                <div 
+                  key={activity.id} 
+                  className="flex items-start gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors duration-200 group"
+                >
+                  <div 
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                    style={{ background: activity.color }}
+                  >
+                    <span className="text-sm">{activity.icon}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900">{activity.user}</p>
+                    <p className="text-sm text-gray-600">{activity.action}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-gray-500 capitalize">{activity.type.replace('_', ' ')}</span>
+                      <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                      <span className="text-xs text-gray-500">{activity.time}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

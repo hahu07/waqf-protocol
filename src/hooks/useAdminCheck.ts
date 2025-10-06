@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export const useAdminCheck = () => {
   const { user, isAdmin: authIsAdmin, isLoading: authLoading } = useAuth();

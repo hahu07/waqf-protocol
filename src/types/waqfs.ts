@@ -127,6 +127,10 @@ export interface Donation {
    * Amount allocated to each cause.
    */
   allocatedCauses?: { [causeId: string]: number };
+  /**
+   * Name of the donor (optional, can be anonymous)
+   */
+  donorName?: string;
 }
 
 /**
@@ -371,9 +375,17 @@ export interface WaqfProfile {
    */
   id: string;
   /**
+   * Name/title of the waqf
+   */
+  name: string;
+  /**
    * Description of the waqf
    */
   description: string;
+  /**
+   * Initial capital amount for the waqf
+   */
+  initialCapital: number;
   
   // Donor and basic info
   donor: DonorProfile;

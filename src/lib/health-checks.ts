@@ -1,5 +1,7 @@
 import { getDoc, setDoc } from '@junobuild/core';
-import { ADMIN_COLLECTION, AUDIT_COLLECTION } from './admin-utils';
+import { ADMIN_COLLECTION } from './admin-utils';
+
+const ACTIVITY_COLLECTION = 'platform_activities';
 
 type HealthStatus = {
   ok: boolean;
@@ -15,7 +17,7 @@ type HealthStatus = {
     };
     admin: {
       read: boolean;
-      auditLog: boolean;
+      activityLog: boolean;
     };
   };
   metrics?: {
@@ -29,10 +31,17 @@ const HEALTH_CHECK_KEY = '__healthcheck__';
 const testStorageWrite = async (): Promise<boolean> => {
   try {
     await setDoc({
-      collection: AUDIT_COLLECTION,
+      collection: ACTIVITY_COLLECTION,
       doc: {
         key: HEALTH_CHECK_KEY,
-        data: { action: 'health_check', timestamp: Date.now() }
+        data: { 
+          id: HEALTH_CHECK_KEY,
+          type: 'system_backup',
+          userId: 'system',
+          userName: 'System',
+          description: 'Health check test',
+          timestamp: Date.now()
+        }
       }
     });
     return true;
@@ -49,7 +58,7 @@ export const checkAdminHealth = async (): Promise<HealthStatus> => {
     components: {
       juno: { connected: false, latencyMs: 0 },
       storage: { writeable: false },
-      admin: { read: false, auditLog: false }
+      admin: { read: false, activityLog: false }
     }
   };
 
@@ -73,8 +82,8 @@ export const checkAdminHealth = async (): Promise<HealthStatus> => {
       key: 'non_existent_key'
     })) === undefined;
 
-    status.components.admin.auditLog = (await getDoc({
-      collection: AUDIT_COLLECTION,
+    status.components.admin.activityLog = (await getDoc({
+      collection: ACTIVITY_COLLECTION,
       key: HEALTH_CHECK_KEY
     })) !== undefined;
 

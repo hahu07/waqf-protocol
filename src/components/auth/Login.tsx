@@ -1,12 +1,12 @@
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export const Login = () => {
   const { signIn, isLoading, error } = useAuth();
 
   const handleLogin = async () => {
     try {
-      await signIn('internet_identity');
+      await signIn();
     } catch (err) {
       console.error('Login failed:', err);
     }

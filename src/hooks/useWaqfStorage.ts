@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import * as waqfUtils from '@/lib/waqf-utils';
 import { calculateGrowthRate } from '@/utils/growthUtils';
 import type { WaqfProfile, Donation, ReturnAllocation } from '@/types/waqfs';
-import { useJuno } from '../context/JunoContext';
+// Juno initialization now handled by AuthProvider
 
 type WaqfPerformance = {
   totalDonations: number;
@@ -55,7 +55,7 @@ type WaqfAllocationSummary = {
 type ListOrderField = 'created_at' | 'updated_at';
 
 export const useWaqfStorage = () => {
-  const { isInitialized } = useJuno();
+  // Juno initialization is now handled by AuthProvider
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -110,7 +110,7 @@ export const useWaqfStorage = () => {
     }
   }, []);
 
-  const recordAllocation = useCallback(async (allocation: Omit<ReturnAllocation, 'id' | 'allocatedAt'>) => {
+  const recordAllocation = useCallback(async (allocation: { causeId: string; amount: number; rationale: string; waqfId: string }) => {
     if (!navigator.onLine) {
       const offlineError = new Error('You appear to be offline - please check your Internet connection');
       setError(offlineError);
@@ -377,10 +377,6 @@ export const useWaqfStorage = () => {
   }, []);
 
   const getPaginatedWaqfs = useCallback(async (options: PaginationOptions) => {
-    if (!isInitialized) {
-      throw new Error('Juno not initialized - please wait for initialization to complete');
-    }
-
     // Enhanced network check
     if (typeof window !== 'undefined' && !navigator.onLine) {
       const offlineError = new Error('Network offline - please check your connection');
@@ -410,7 +406,7 @@ export const useWaqfStorage = () => {
     } finally {
       setLoading(false);
     }
-  }, [isInitialized]);
+  }, []);
 
   return {
     createWaqf,

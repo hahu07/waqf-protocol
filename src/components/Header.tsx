@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -30,9 +30,11 @@ export function Header() {
   };
 
   const navLinks = [
+    { href: '/causes', label: 'Causes' },
     { href: '/#features', label: 'Features' },
     { href: '/#how-it-works', label: 'How It Works' },
     { href: '/#testimonials', label: 'Testimonials' },
+    { href: '/team', label: 'Team' },
     { href: '/about', label: 'About' },
   ];
 

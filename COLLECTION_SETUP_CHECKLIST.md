@@ -13,6 +13,7 @@ Current: `atbka-rp777-77775-aaaaq-cai`
 - [ ] **donations** - Tracks donations and contributions
 - [ ] **allocations** - Records fund allocation history
 - [ ] **admins** - Admin user management data
+- [ ] **platform_activities** - Stores activity logs for admin dashboard
 
 ### 2. Asset Collections  
 **Settings**: Type: Assets, Read: public, Write: managed, Memory: heap
@@ -47,7 +48,7 @@ After creating all collections:
 
 **If dashboard still shows error after creating collections:**
 1. Hard refresh browser (Ctrl+F5 / Cmd+Shift+R)
-2. Check all 6 collections exist in Juno console
+2. Check all 7 collections exist in Juno console
 3. Verify collection names match exactly (case-sensitive)
 4. Clear browser cache
 5. Restart dev server: `npm run dev`

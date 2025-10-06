@@ -4,7 +4,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Navbar } from "@/components/waqf/Navbar";
 import { Suspense } from "react";
 import { LoadingState } from "@/components/ui/loading-state";
-import { AuthProvider } from "@/components/auth/AuthProvider";
+// AuthProvider now handled by main layout
 
 interface ErrorFallbackProps {
   error: Error;
@@ -31,8 +31,7 @@ function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider>
-      <div className="min-h-screen relative overflow-hidden">
+    <div className="min-h-screen relative overflow-hidden">
         {/* Modern gradient background */}
         <div className="fixed inset-0 z-0">
           <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-emerald-50 to-green-50" />
@@ -66,6 +65,5 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
-    </AuthProvider>
   );
 }

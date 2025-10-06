@@ -30,9 +30,11 @@ const convertBasicCauseToCause = (basicCause: BasicCause): Cause => ({
 });
 
 interface WaqfFormData {
+  name: string;
   donorName: string;
   donorEmail: string;
   description: string;
+  initialCapital: number;
   selectedCauseIds: string[];
 }
 
@@ -52,22 +54,27 @@ export function WaqfForm({
   onSubmit 
 }: WaqfFormProps) {
   const [formData, setFormData] = useState<WaqfFormData>({
+    name: initialData?.name || '',
     donorName: initialData?.donor.name || '',
     donorEmail: initialData?.donor.email || '',
     description: initialData?.description || '',
+    initialCapital: initialData?.initialCapital || 0,
     selectedCauseIds: initialData?.selectedCauses || []
   });
   
   const [showCausesModal, setShowCausesModal] = useState(false);
   const [formErrors, setFormErrors] = useState<{
+    name?: string;
     donorName?: string;
     donorEmail?: string;
     description?: string;
+    initialCapital?: string;
   }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateForm = (): boolean => {
     const errors: typeof formErrors = {};
+    if (!formData.name.trim()) errors.name = 'Waqf name is required';
     if (!formData.donorName.trim()) errors.donorName = 'Donor name is required';
     if (!formData.donorEmail.trim()) {
       errors.donorEmail = 'Email is required';
@@ -79,6 +86,9 @@ export function WaqfForm({
     } else if (formData.description.length < 20) {
       errors.description = 'Description must be at least 20 characters';
     }
+    if (formData.initialCapital <= 0) {
+      errors.initialCapital = 'Initial capital must be greater than 0';
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -89,7 +99,9 @@ export function WaqfForm({
     
     setIsSubmitting(true);
     const waqfProfile: Omit<WaqfProfile, 'id'> = {
+      name: formData.name,
       description: formData.description,
+      initialCapital: formData.initialCapital,
       donor: {
         name: formData.donorName,
         email: formData.donorEmail,
@@ -181,6 +193,39 @@ export function WaqfForm({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="name" className="text-sm sm:text-base">
+              Waqf Name
+            </Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              className={`w-full text-sm sm:text-base ${formErrors.name ? 'border-red-500' : ''}`}
+            />
+            {formErrors.name && (
+              <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="initialCapital" className="text-sm sm:text-base">
+              Initial Capital ($)
+            </Label>
+            <Input
+              id="initialCapital"
+              type="number"
+              min="1"
+              step="0.01"
+              value={formData.initialCapital}
+              onChange={(e) => setFormData({...formData, initialCapital: parseFloat(e.target.value) || 0})}
+              className={`w-full text-sm sm:text-base ${formErrors.initialCapital ? 'border-red-500' : ''}`}
+            />
+            {formErrors.initialCapital && (
+              <p className="text-red-500 text-xs mt-1">{formErrors.initialCapital}</p>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="donorName" className="text-sm sm:text-base">
               Donor Name

@@ -1,0 +1,3 @@
+[target.wasm32-unknown-unknown]
+# Enable wasm_js feature for getrandom crate
+rustflags = ["--cfg", "wasm_js"]

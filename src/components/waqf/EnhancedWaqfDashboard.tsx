@@ -266,7 +266,7 @@ export function EnhancedWaqfDashboard({ profile, onAddFunds, onDistribute }: Enh
                           padding: 12,
                           font: {
                             size: 11,
-                            weight: '500',
+                            weight: 500,
                             family: 'system-ui, -apple-system, sans-serif',
                           },
                           usePointStyle: true,
@@ -281,7 +281,9 @@ export function EnhancedWaqfDashboard({ profile, onAddFunds, onDistribute }: Enh
                                 const cause = causeData[i];
                                 return {
                                   text: `${cause?.icon || ''} ${label} (${formatPercentage(value)})`,
-                                  fillStyle: data.datasets[0].backgroundColor?.[i] as string,
+                                  fillStyle: Array.isArray(data.datasets[0].backgroundColor) 
+                                    ? (data.datasets[0].backgroundColor[i] as string)
+                                    : (data.datasets[0].backgroundColor as string),
                                   hidden: false,
                                   index: i,
                                 };
@@ -309,7 +311,7 @@ export function EnhancedWaqfDashboard({ profile, onAddFunds, onDistribute }: Enh
                         bodyColor: '#ffffff',
                         titleFont: {
                           size: 13,
-                          weight: 'bold',
+                          weight: 'bold' as const,
                         },
                         bodyFont: {
                           size: 12,

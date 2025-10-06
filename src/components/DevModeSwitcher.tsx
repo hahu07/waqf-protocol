@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
 
 export function DevModeSwitcher() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [devMode, setDevMode] = useState(false);
   const [overrideRole, setOverrideRole] = useState<'admin' | 'user' | null>(null);
 
@@ -47,7 +47,8 @@ export function DevModeSwitcher() {
 
   if (!isDevelopment || !user) return null;
 
-  const actualRole = user.role || 'user';
+  // Determine actual role based on isAdmin from auth context
+  const actualRole = isAdmin ? 'admin' : 'user';
   const displayRole = overrideRole || actualRole;
 
   return (

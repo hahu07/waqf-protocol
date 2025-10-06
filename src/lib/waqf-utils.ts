@@ -1,6 +1,7 @@
 // src/lib/waqf-utils.ts
 import { setDoc, getDoc, listDocs } from '@junobuild/core';
 import type { WaqfProfile, Donation, ReturnAllocation } from '@/types/waqfs';
+import { logActivity } from './activity-utils';
 
 // Collection Names
 export const WAQF_COLLECTION = 'waqfs';
@@ -15,7 +16,7 @@ type AllocationGroup = {
   id: string;
 };
 
-export const createWaqf = async (waqf: Omit<WaqfProfile, 'id' | 'createdAt' | 'updatedAt'>) => {
+export const createWaqf = async (waqf: Omit<WaqfProfile, 'id' | 'createdAt' | 'updatedAt'>, userId?: string, userName?: string) => {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await setDoc({
@@ -31,6 +32,27 @@ export const createWaqf = async (waqf: Omit<WaqfProfile, 'id' | 'createdAt' | 'u
       }
     }
   });
+  
+  // Log waqf creation activity
+  if (userId && userName) {
+    try {
+      await logActivity(
+        'waqf_created',
+        userId,
+        userName,
+        {
+          targetId: id,
+          targetName: waqf.name,
+          amount: waqf.initialCapital,
+          status: 'active'
+        }
+      );
+    } catch (error) {
+      console.error('Failed to log waqf creation:', error);
+      // Don't throw - logging failure shouldn't prevent waqf creation
+    }
+  }
+  
   return id;
 };
 
@@ -54,7 +76,7 @@ export const getWaqf = async (id: string) => {
   }
 };
 
-export const updateWaqf = async (id: string, updates: Partial<WaqfProfile>) => {
+export const updateWaqf = async (id: string, updates: Partial<WaqfProfile>, userId?: string, userName?: string) => {
   const existing = await getWaqf(id);
   if (!existing) throw new Error('Waqf not found');
   await setDoc({
@@ -68,6 +90,26 @@ export const updateWaqf = async (id: string, updates: Partial<WaqfProfile>) => {
       }
     }
   });
+  
+  // Log waqf update activity
+  if (userId && userName) {
+    try {
+      await logActivity(
+        'waqf_updated',
+        userId,
+        userName,
+        {
+          targetId: id,
+          targetName: existing.name,
+          status: updates.status || existing.status,
+          updatedFields: Object.keys(updates)
+        }
+      );
+    } catch (error) {
+      console.error('Failed to log waqf update:', error);
+      // Don't throw - logging failure shouldn't prevent waqf update
+    }
+  }
 };
 
 export const listWaqfs = async () => {
@@ -113,7 +155,7 @@ export const getPaginatedWaqfs = async (options: {
   return result;
 };
 
-export const recordDonation = async (donation: Omit<Donation, 'id'>) => {
+export const recordDonation = async (donation: Omit<Donation, 'id'>, userId?: string, userName?: string) => {
   const id = crypto.randomUUID();
   await setDoc({
     collection: DONATIONS_COLLECTION,
@@ -127,6 +169,27 @@ export const recordDonation = async (donation: Omit<Donation, 'id'>) => {
       }
     }
   });
+  
+  // Log donation activity
+  if (userId && userName) {
+    try {
+      await logActivity(
+        'donation_received',
+        userId,
+        userName,
+        {
+          targetId: donation.waqfId,
+          targetName: `Donation to Waqf`,
+          amount: donation.amount,
+          donorName: donation.donorName || 'Anonymous'
+        }
+      );
+    } catch (error) {
+      console.error('Failed to log donation:', error);
+      // Don't throw - logging failure shouldn't prevent donation recording
+    }
+  }
+  
   return id;
 };
 
@@ -151,7 +214,7 @@ export const recordDonations = async (donations: Array<Omit<Donation, 'id'>>) =>
   return results;
 };
 
-export const recordAllocation = async (allocation: Omit<ReturnAllocation, 'id' | 'allocatedAt'>) => {
+export const recordAllocation = async (allocation: { causeId: string; amount: number; rationale: string; waqfId: string }, userId?: string, userName?: string) => {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await setDoc({
@@ -165,11 +228,32 @@ export const recordAllocation = async (allocation: Omit<ReturnAllocation, 'id' |
       }
     }
   });
+  
+  // Log allocation activity
+  if (userId && userName) {
+    try {
+      await logActivity(
+        'allocation_created',
+        userId,
+        userName,
+        {
+          targetId: allocation.causeId,
+          targetName: `Allocation to Cause`,
+          amount: allocation.amount
+        }
+      );
+    } catch (error) {
+      console.error('Failed to log allocation:', error);
+      // Don't throw - logging failure shouldn't prevent allocation recording
+    }
+  }
+  
   return id;
 };
 
-export const allocateReturns = async (waqfId: string, allocations: Array<{causeId: string, amount: number, rationale: string}>) => {
+export const allocateReturns = async (waqfId: string, allocations: Array<{causeId: string, amount: number, rationale: string}>, userId?: string, userName?: string) => {
   const id = crypto.randomUUID();
+  const totalAmount = allocations.reduce((sum, a) => sum + a.amount, 0);
   await setDoc({
     collection: ALLOCATIONS_COLLECTION,
     doc: {
@@ -178,10 +262,30 @@ export const allocateReturns = async (waqfId: string, allocations: Array<{causeI
         waqfId,
         allocations,
         allocatedAt: new Date().toISOString(),
-        totalAmount: allocations.reduce((sum, a) => sum + a.amount, 0)
+        totalAmount
       }
     }
   });
+  
+  // Log bulk allocation activity
+  if (userId && userName) {
+    try {
+      await logActivity(
+        'allocation_created',
+        userId,
+        userName,
+        {
+          targetId: waqfId,
+          targetName: `Bulk Allocation (${allocations.length} causes)`,
+          amount: totalAmount
+        }
+      );
+    } catch (error) {
+      console.error('Failed to log bulk allocation:', error);
+      // Don't throw - logging failure shouldn't prevent allocation
+    }
+  }
+  
   return id;
 };
 
@@ -202,9 +306,10 @@ export const getWaqfAllocations = async (waqfId: string) => {
   }
 };
 
-export const activateWaqf = async (waqfId: string) => {
+export const activateWaqf = async (waqfId: string, userId?: string, userName?: string) => {
   const existing = await getWaqf(waqfId);
   if (!existing) throw new Error('Waqf not found');
+  const previousStatus = existing.status;
   await setDoc({
     collection: WAQF_COLLECTION,
     doc: {
@@ -216,11 +321,30 @@ export const activateWaqf = async (waqfId: string) => {
       }
     }
   });
+  
+  // Log waqf activation
+  if (userId && userName) {
+    try {
+      await logActivity(
+        'waqf_updated',
+        userId,
+        userName,
+        {
+          targetId: waqfId,
+          targetName: existing.name,
+          status: 'active'
+        }
+      );
+    } catch (error) {
+      console.error('Failed to log waqf activation:', error);
+    }
+  }
 };
 
-export const deactivateWaqf = async (waqfId: string) => {
+export const deactivateWaqf = async (waqfId: string, userId?: string, userName?: string) => {
   const existing = await getWaqf(waqfId);
   if (!existing) throw new Error('Waqf not found');
+  const previousStatus = existing.status;
   await setDoc({
     collection: WAQF_COLLECTION,
     doc: {
@@ -232,11 +356,30 @@ export const deactivateWaqf = async (waqfId: string) => {
       }
     }
   });
+  
+  // Log waqf deactivation
+  if (userId && userName) {
+    try {
+      await logActivity(
+        'waqf_updated',
+        userId,
+        userName,
+        {
+          targetId: waqfId,
+          targetName: existing.name,
+          status: 'inactive'
+        }
+      );
+    } catch (error) {
+      console.error('Failed to log waqf deactivation:', error);
+    }
+  }
 };
 
-export const archiveWaqf = async (waqfId: string) => {
+export const archiveWaqf = async (waqfId: string, userId?: string, userName?: string) => {
   const existing = await getWaqf(waqfId);
   if (!existing) throw new Error('Waqf not found');
+  const previousStatus = existing.status;
   await setDoc({
     collection: WAQF_COLLECTION,
     doc: {
@@ -248,6 +391,24 @@ export const archiveWaqf = async (waqfId: string) => {
       }
     }
   });
+  
+  // Log waqf archival
+  if (userId && userName) {
+    try {
+      await logActivity(
+        'waqf_updated',
+        userId,
+        userName,
+        {
+          targetId: waqfId,
+          targetName: existing.name,
+          status: 'archived'
+        }
+      );
+    } catch (error) {
+      console.error('Failed to log waqf archival:', error);
+    }
+  }
 };
 
 export const getWaqfPerformance = async (waqfId: string) => {

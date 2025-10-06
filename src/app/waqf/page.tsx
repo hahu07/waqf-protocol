@@ -1,7 +1,7 @@
 // app/waqf/page.tsx
 'use client';
 
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { useFetchWaqfData } from "@/hooks/useWaqfData";
 import { useWaqfCreatorCheck } from "@/hooks/useWaqfCreatorCheck";
 import { EnhancedWaqfDashboard } from "@/components/waqf/EnhancedWaqfDashboard";

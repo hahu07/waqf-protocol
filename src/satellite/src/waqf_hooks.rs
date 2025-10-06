@@ -1,14 +1,11 @@
 use crate::{
-    lib::{admin_utils, waqf_utils},
-    waqf_types::{WaqfDoc, WaqfStatus},
+    lib::waqf_utils,
+    waqf_types::{WaqfData},
 };
-use junobuild_satellite::{on_set_doc, Result, OnSetDocContext};
-use junobuild_macros::{assert_set_doc, assert_delete_doc};
+use junobuild_satellite::{OnSetDocContext, AssertSetDocContext, AssertDeleteDocContext};
+use junobuild_utils::{decode_doc_data};
 use serde::{Serialize, Deserialize};
 use std::fmt;
-
-const WAQF_COLLECTION: &str = "waqfs";
-const WAQF_AUDIT_COLLECTION: &str = "waqf_audit";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum WaqfAction {
@@ -57,66 +54,90 @@ pub struct WaqfValidationResult {
     pub errors: Option<Vec<WaqfValidationError>>,
 }
 
-#[assert_set_doc(collection = WAQF_COLLECTION)]
-pub fn validate_waqf(ctx: &OnSetDocContext) -> Result<()> {
-    let waqf: WaqfDoc = ctx.decode_doc()?;
+// Main assertion function for waqf operations
+pub fn assert_waqf_operations(context: AssertSetDocContext) -> std::result::Result<(), String> {
+    // Decode waqf data with proper error handling
+    let waqf: WaqfData = decode_doc_data(&context.data.data.proposed.data)
+        .map_err(|e| format!("Invalid waqf data structure: {}", e))?;
     
-    match waqf_utils::validate_waqf_complete(&waqf) {
-        WaqfValidationResult { valid: true, .. } => {},
-        WaqfValidationResult { errors: Some(errors), .. } => {
-            return Err(errors.into_iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-                .into());
-        },
-        _ => unreachable!(),
-    }
-
-    let is_admin = admin_utils::is_admin(&ctx.caller)?;
-    waqf_utils::validate_waqf_update_permissions(&waqf, &ctx.caller.to_string(), is_admin)
-        .map_err(|e| e.to_string().into())
-}
-
-#[assert_delete_doc(collection = WAQF_COLLECTION)]
-pub fn validate_waqf_deletion(ctx: &OnSetDocContext) -> Result<()> {
-    let waqf: WaqfDoc = ctx.decode_doc()?;
+    // Validate the waqf data structure
+    waqf_utils::validate_waqf_data(&waqf)?;
     
-    if matches!(waqf.data.status, WaqfStatus::Active) {
-        return Err("Cannot delete active waqf - pause or complete first".into());
-    }
-    
-    if waqf.data.created_by != ctx.caller.to_string() {
-        return Err("Only waqf creator can delete".into());
-    }
+    // Log the validation attempt
+    ic_cdk::println!(
+        "Waqf validation passed: {} - Status: {}, Initial Capital: {}", 
+        waqf.name, waqf.status, waqf.initial_capital
+    );
     
     Ok(())
 }
 
-#[on_set_doc(collection = WAQF_COLLECTION)]
-pub fn on_waqf_change(ctx: OnSetDocContext) -> Result<()> {
-    let waqf: WaqfDoc = ctx.decode_doc()?;
-    let action = match (ctx.is_create(), &waqf.data.status) {
-        (true, _) => WaqfAction::Create,
-        (_, WaqfStatus::Paused) => WaqfAction::Pause,
-        (_, WaqfStatus::Completed) => WaqfAction::Complete,
-        _ => WaqfAction::Update,
-    };
-
-    waqf_utils::log_waqf_audit(
-        &waqf.data.id,
-        action,
-        &ctx.caller.to_string(),
-        Some(format!("Status: {:?}", waqf.data.status)),
-    )
+// Deletion assertion for waqfs
+pub fn assert_waqf_deletion(context: AssertDeleteDocContext) -> std::result::Result<(), String> {
+    // Get the waqf being deleted  
+    let current_doc = context.data.data.current.as_ref()
+        .ok_or("No current document found for deletion")?;
+    let waqf_to_delete: WaqfData = decode_doc_data(&current_doc.data)
+        .map_err(|e| format!("Cannot decode waqf data for deletion: {}", e))?;
+    
+    // Prevent deletion of active waqfs
+    if waqf_to_delete.status == "active" {
+        return Err("Cannot delete active waqf - change status first".into());
+    }
+    
+    // Log deletion attempt
+    ic_cdk::println!(
+        "Waqf deletion: {} - Status: {}, Initial Capital: {}", 
+        waqf_to_delete.name, waqf_to_delete.status, waqf_to_delete.initial_capital
+    );
+    
+    Ok(())
 }
 
-#[on_set_doc(collection = WAQF_AUDIT_COLLECTION)] 
-pub fn process_waqf_audit(ctx: OnSetDocContext) -> Result<()> {
-    let audit: WaqfAudit = ctx.decode_doc()?;
+// Handle waqf changes (logging, notifications, etc.)
+pub fn handle_waqf_changes(context: OnSetDocContext) -> std::result::Result<(), String> {
+    let waqf_data: WaqfData = decode_doc_data(&context.data.data.after.data)
+        .map_err(|e| format!("Cannot decode waqf data: {}", e))?;
     
-    if matches!(audit.action, WaqfAction::Pause | WaqfAction::Complete) {
-        waqf_utils::notify_critical_waqf_action(&audit)?;
+    // Determine if this is a creation or update
+    let operation_type = if context.data.data.before.is_none() {
+        "CREATE"
+    } else {
+        "UPDATE"
+    };
+    
+    // Enhanced logging for audit purposes
+    ic_cdk::println!(
+        "Waqf {}: {} - Name: {}, Status: {}, Donor: {}, Initial Capital: {}", 
+        operation_type,
+        context.data.key,
+        waqf_data.name,
+        waqf_data.status,
+        waqf_data.donor.name,
+        waqf_data.initial_capital
+    );
+    
+    // Log status-specific information
+    match waqf_data.status.as_str() {
+        "active" => {
+            ic_cdk::println!(
+                "IMPORTANT: Waqf activated - {} for {} (Initial Capital: {})", 
+                waqf_data.name, waqf_data.donor.name, waqf_data.initial_capital
+            );
+        },
+        "completed" => {
+            ic_cdk::println!(
+                "INFO: Waqf completed - {} for {}", 
+                waqf_data.name, waqf_data.donor.name
+            );
+        },
+        "archived" => {
+            ic_cdk::println!(
+                "NOTICE: Waqf archived - {} for {}", 
+                waqf_data.name, waqf_data.donor.name
+            );
+        },
+        _ => {}
     }
     
     Ok(())

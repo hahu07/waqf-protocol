@@ -31,6 +31,8 @@ type AuthContextValue = {
   error: Error | undefined;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  toggleAuthMode: () => void;
+  isSignUpMode: boolean;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -69,6 +71,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | undefined>();
+  const [isSignUpMode, setIsSignUpMode] = useState(false);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -102,31 +105,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
+  const toggleAuthMode = () => {
+    setIsSignUpMode(prev => !prev);
+  };
+
   const value = useMemo<AuthContextValue>(() => ({
     user,
     isAuthenticated: !!user,
     isAdmin: checkIsAdmin(user),
     isLoading,
     error,
+    isSignUpMode,
+    toggleAuthMode,
     signIn: async () => {
       try {
         setIsLoading(true);
-        // Only Internet Identity authentication
-        await signIn({ internet_identity: {} });
+        setError(undefined);
+        // Internet Identity authentication with custom domain option
+        await signIn({ 
+          internet_identity: {
+            options: {
+              domain: "id.ai"
+            }
+          } 
+        });
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Sign-in with Internet Identity failed'));
+        throw err;
       } finally {
         setIsLoading(false);
       }
     },
     signOut: async () => {
       try {
+        setIsLoading(true);
         await signOut();
+        setUser(null);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Sign-out failed'));
+        throw err;
+      } finally {
+        setIsLoading(false);
       }
     },
-  }), [user, isLoading, error]);
+  }), [user, isLoading, error, isSignUpMode]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

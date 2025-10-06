@@ -12,10 +12,10 @@ export function AdminStats() {
 
   const stats = {
     totalAdmins: admins?.length || 0,
-    superAdmins: admins?.filter(a => a.data.permissions.includes('super')).length || 0,
-    contentAdmins: admins?.filter(a => a.data.permissions.includes('content')).length || 0,
-    userAdmins: admins?.filter(a => a.data.permissions.includes('users')).length || 0,
-    settingsAdmins: admins?.filter(a => a.data.permissions.includes('settings')).length || 0
+    platformAdmins: admins?.filter(a => a.data.permissions.includes('platform_governance')).length || 0,
+    waqfManagers: admins?.filter(a => a.data.permissions.includes('waqf_management')).length || 0,
+    causeManagers: admins?.filter(a => a.data.permissions.includes('cause_management')).length || 0,
+    supportAgents: admins?.filter(a => a.data.permissions.includes('user_support')).length || 0
   };
 
   if (isLoading) {
@@ -47,26 +47,26 @@ export function AdminStats() {
       </Card>
       <Card className="min-h-[120px]">
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-sm font-medium">Super Admins</CardTitle>
+          <CardTitle className="text-sm font-medium">🏛️ Platform Admins</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
-          <div className="text-xl sm:text-2xl font-bold">{stats.superAdmins}</div>
+          <div className="text-xl sm:text-2xl font-bold">{stats.platformAdmins}</div>
         </CardContent>
       </Card>
       <Card className="min-h-[120px]">
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-sm font-medium">Content Admins</CardTitle>
+          <CardTitle className="text-sm font-medium">🕌 Waqf Managers</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
-          <div className="text-xl sm:text-2xl font-bold">{stats.contentAdmins}</div>
+          <div className="text-xl sm:text-2xl font-bold">{stats.waqfManagers}</div>
         </CardContent>
       </Card>
       <Card className="min-h-[120px]">
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-sm font-medium">User Admins</CardTitle>
+          <CardTitle className="text-sm font-medium">🎯 Cause Managers</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
-          <div className="text-xl sm:text-2xl font-bold">{stats.userAdmins}</div>
+          <div className="text-xl sm:text-2xl font-bold">{stats.causeManagers}</div>
         </CardContent>
       </Card>
     </div>

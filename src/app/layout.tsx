@@ -4,8 +4,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Inter, Roboto_Mono } from 'next/font/google';
-import { JunoProvider } from '../context/JunoContext';
-import { AuthProvider } from '../context/AuthContext';
+import { AuthProvider } from '../components/auth/AuthProvider';
 import { WaqfProvider } from '../providers/WaqfProvider';
 import { Toaster } from 'react-hot-toast';
 import { ScrollProgress } from '@/components/ScrollProgress';
@@ -25,10 +24,9 @@ export default function RootLayout({
   const [isHydrated, setIsHydrated] = useState(false);
   const pathname = usePathname();
   
-  // Hide header/footer in admin, waqf dashboards, and auth pages
+  // Hide header/footer in admin and waqf dashboards only
   const hideHeaderFooter = pathname?.startsWith('/admin') || 
-                           pathname?.startsWith('/waqf') || 
-                           pathname?.startsWith('/auth');
+                           pathname?.startsWith('/waqf');
 
   useEffect(() => {
     setIsHydrated(true);
@@ -36,22 +34,20 @@ export default function RootLayout({
 
   return (
     <html lang="en" className={`${inter.variable} ${robotoMono.variable}`}>
-      <body className="font-sans antialiased" suppressHydrationWarning>
-        <JunoProvider>
-          <AuthProvider>
-            <WaqfProvider>
-              <div className="min-h-screen flex flex-col">
-                <ScrollProgress />
-                {!hideHeaderFooter && <Header />}
-                <main className="flex-1">
-                  {isHydrated ? children : <div id="root-loading">{children}</div>}
-                </main>
-                {!hideHeaderFooter && <Footer />}
-                <DevModeSwitcher />
-              </div>
-            </WaqfProvider>
-          </AuthProvider>
-        </JunoProvider>
+      <body className={`${inter.className} font-sans antialiased text-gray-900`} suppressHydrationWarning>
+        <AuthProvider>
+          <WaqfProvider>
+            <div className="min-h-screen flex flex-col">
+              <ScrollProgress />
+              {!hideHeaderFooter && <Header />}
+              <main className="flex-1">
+                {isHydrated ? children : <div id="root-loading">{children}</div>}
+              </main>
+              {!hideHeaderFooter && <Footer />}
+              <DevModeSwitcher />
+            </div>
+          </WaqfProvider>
+        </AuthProvider>
         <Toaster position="bottom-right" />
       </body>
     </html>

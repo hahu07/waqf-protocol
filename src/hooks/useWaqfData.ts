@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useWaqf } from '@/providers/WaqfProvider';
 import type { WaqfProfile, Cause, Donation, ReturnAllocation } from '@/types/waqfs';
 import { useDebouncedCallback } from '@/lib/debounce';
-import { useJuno } from '../context/JunoContext';
+// Juno initialization now handled by AuthProvider
 import { listCauses } from '@/lib/cause-utils';
 
 type WaqfData = {
@@ -47,7 +47,7 @@ const transformAllocations = (apiAllocations: ApiAllocationResponse[]): ReturnAl
 };
 
 export function useFetchWaqfData(waqfId?: string) {
-  const { isInitialized } = useJuno();
+  // Juno initialization is now handled by AuthProvider
   const { 
     getWaqf,
     getWaqfDonations,
@@ -73,9 +73,7 @@ export function useFetchWaqfData(waqfId?: string) {
 
   const fetchData = async (retryCount = 0, lastError?: Error) => {
     try {
-      if (!isInitialized) {
-        throw new Error('Juno not initialized');
-      }
+      // Juno initialization is handled by AuthProvider
 
       // Network awareness
       if (typeof window !== 'undefined' && !navigator.onLine) {
@@ -148,10 +146,8 @@ export function useFetchWaqfData(waqfId?: string) {
   };
 
   useEffect(() => {
-    if (!isInitialized) return;
-    
     fetchData().catch(setWaqfError);
-  }, [isInitialized, waqfId, getWaqf, getPaginatedWaqfs, getWaqfDonations, getWaqfAllocations]);
+  }, [waqfId, getWaqf, getPaginatedWaqfs, getWaqfDonations, getWaqfAllocations]);
 
   const statistics = useMemo<WaqfStatistics>(() => {
     if (loading) return null;

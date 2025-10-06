@@ -1,6 +1,8 @@
 // components/admin/CauseFormModal.tsx - FOR ADMINS ONLY
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/components/auth/AuthProvider';
 import type { Cause } from "@/types/waqfs";
+import { canApproveCauses, canManageCauses } from '@/lib/admin-utils';
 import MDEditor from '@uiw/react-md-editor';
 import rehypeSanitize from 'rehype-sanitize';
 import { useDropzone } from 'react-dropzone';
@@ -22,6 +24,9 @@ export const CauseFormModal = ({
   onClose,
   onDelete 
 }: CauseFormModalProps) => {
+  const { user } = useAuth();
+  const [canApprove, setCanApprove] = useState(false);
+  const [canManage, setCanManage] = useState(false);
   const [formData, setFormData] = useState<Omit<Cause, 'createdAt' | 'updatedAt'>>(() => ({
     id: cause?.id || '',
     name: cause?.name || '',
@@ -29,9 +34,9 @@ export const CauseFormModal = ({
     icon: cause?.icon || '❤️',
     coverImage: cause?.coverImage || '',
     category: cause?.category || 'general',
-    isActive: cause?.isActive ?? true,
+    isActive: cause?.isActive ?? false, // Default to false for new causes
     sortOrder: cause?.sortOrder || 0,
-    status: cause?.status || 'approved',
+    status: cause?.status || 'pending', // Default to pending for new causes
     followers: cause?.followers || 0,
     fundsRaised: cause?.fundsRaised || 0
   }));
@@ -39,6 +44,19 @@ export const CauseFormModal = ({
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Check permissions
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (user?.key) {
+        const hasApprovalPermission = await canApproveCauses(user.key);
+        const hasManagementPermission = await canManageCauses(user.key);
+        setCanApprove(hasApprovalPermission);
+        setCanManage(hasManagementPermission);
+      }
+    };
+    checkPermissions();
+  }, [user]);
 
   // Reset form data when modal opens or cause changes
   useEffect(() => {
@@ -50,9 +68,9 @@ export const CauseFormModal = ({
         icon: cause?.icon || '❤️',
         coverImage: cause?.coverImage || '',
         category: cause?.category || 'general',
-        isActive: cause?.isActive ?? true,
+        isActive: cause?.isActive ?? false, // Default to false for new causes
         sortOrder: cause?.sortOrder || 0,
-        status: cause?.status || 'approved',
+        status: cause?.status || 'pending', // Default to pending for new causes
         followers: cause?.followers || 0,
         fundsRaised: cause?.fundsRaised || 0
       });
@@ -457,44 +475,82 @@ export const CauseFormModal = ({
                 </select>
               </div>
 
-              {/* Approval Status */}
-              <div>
-                <label className="block text-sm font-semibold mb-2 text-gray-700">
-                  ✅ Approval Status
-                </label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as 'pending' | 'approved' | 'rejected' }))}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-white"
-                >
-                  <option value="approved">✅ Approved</option>
-                  <option value="pending">⏳ Pending Review</option>
-                  <option value="rejected">❌ Rejected</option>
-                </select>
-              </div>
+              {/* Approval Status - Only for users with approval permission */}
+              {canApprove ? (
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-gray-700">
+                    ✅ Approval Status
+                  </label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as 'pending' | 'approved' | 'rejected' }))}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-white"
+                  >
+                    <option value="approved">✅ Approved</option>
+                    <option value="pending">⏳ Pending Review</option>
+                    <option value="rejected">❌ Rejected</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-gray-700">
+                    ✅ Status
+                  </label>
+                  <div className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-600">
+                    {formData.status === 'approved' && '✅ Approved'}
+                    {formData.status === 'pending' && '⏳ Pending Review'}
+                    {formData.status === 'rejected' && '❌ Rejected'}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">💡 Only authorized admins can change approval status</p>
+                </div>
+              )}
             </div>
 
             {/* Active Status and Sort Order */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gray-50 p-4 rounded-xl border-2 border-gray-200">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    id="isActive"
-                    checked={formData.isActive}
-                    onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
-                    className="h-5 w-5 text-blue-600 focus:ring-4 focus:ring-blue-100 rounded border-2 border-gray-300"
-                  />
-                  <div>
-                    <span className="text-sm font-semibold text-gray-700 block">
-                      {formData.isActive ? '✅ Active' : '⏸️ Inactive'}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {formData.isActive ? 'Visible to users' : 'Hidden from users'}
-                    </span>
+              {/* Active Status - Only for users with approval permission */}
+              {canApprove ? (
+                <div className="bg-gray-50 p-4 rounded-xl border-2 border-gray-200">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      id="isActive"
+                      checked={formData.isActive}
+                      onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
+                      className="h-5 w-5 text-blue-600 focus:ring-4 focus:ring-blue-100 rounded border-2 border-gray-300"
+                    />
+                    <div>
+                      <span className="text-sm font-semibold text-gray-700 block">
+                        {formData.isActive ? '✅ Active' : '⏸️ Inactive'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {formData.isActive ? 'Visible to users' : 'Hidden from users'}
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              ) : (
+                <div className="bg-gray-100 p-4 rounded-xl border-2 border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded flex items-center justify-center text-xs ${
+                      formData.isActive ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'
+                    }`}>
+                      {formData.isActive ? '✓' : '✕'}
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-gray-700 block">
+                        {formData.isActive ? '✅ Active' : '⏸️ Inactive'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {formData.isActive ? 'Visible to users' : 'Hidden from users'}
+                      </span>
+                      <span className="text-xs text-gray-500 block mt-1">
+                        💡 Only authorized admins can change visibility
+                      </span>
+                    </div>
                   </div>
-                </label>
-              </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-semibold mb-2 text-gray-700">

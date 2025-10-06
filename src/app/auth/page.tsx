@@ -2,7 +2,7 @@
 
 import { AuthSection } from '@/components/auth/AuthSection';
 import { Card } from '@/components/ui/card';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, Suspense } from 'react';
 

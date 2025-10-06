@@ -242,7 +242,7 @@ export function SettingManager({
                     />
                   )}
                   
-                  {field.type === 'select' && field.options && (
+                  {field.type === 'select' && 'options' in field && field.options && (
                     <select
                       value={settings[field.key as keyof typeof settings] as string}
                       onChange={(e) => setSettings({ ...settings, [field.key]: e.target.value })}

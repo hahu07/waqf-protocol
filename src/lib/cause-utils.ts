@@ -1,5 +1,7 @@
 // src/lib/cause-utils.ts
 import { setDoc, getDoc, listDocs, deleteDoc } from '@junobuild/core';
+import { logActivity } from './activity-utils';
+import { canApproveCauses, canManageCauses } from './admin-utils';
 import type { Cause, CauseDoc } from '@/types/waqfs';
 
 // Collection Name
@@ -8,8 +10,13 @@ export const CAUSES_COLLECTION = 'causes';
 /**
  * Create a new cause
  */
-export const createCause = async (cause: Omit<Cause, 'id' | 'createdAt' | 'updatedAt'>) => {
+export const createCause = async (cause: Omit<Cause, 'id' | 'createdAt' | 'updatedAt'>, userId?: string, userName?: string) => {
   try {
+    // Check if user has cause management permission (only waqf_manager and platform_admin)
+    if (userId && !await canManageCauses(userId)) {
+      throw new Error('Permission denied: Only Waqf Managers can create causes');
+    }
+    
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     
@@ -22,14 +29,28 @@ export const createCause = async (cause: Omit<Cause, 'id' | 'createdAt' | 'updat
           id,
           createdAt: now,
           updatedAt: now,
-          isActive: cause.isActive ?? true,
-          status: cause.status || 'pending',
+          isActive: cause.isActive ?? false, // New causes start inactive until approved
+          status: 'pending', // All new causes must be approved
           followers: cause.followers || 0,
           fundsRaised: cause.fundsRaised || 0,
           sortOrder: cause.sortOrder || 0
         }
       }
     });
+    
+    // Log the activity if user info is provided
+    if (userId && userName) {
+      await logActivity(
+        'cause_created',
+        userId,
+        userName,
+        {
+          targetId: id,
+          targetName: cause.name,
+          status: cause.status || 'pending'
+        }
+      );
+    }
     
     return id;
   } catch (error) {
@@ -57,8 +78,22 @@ export const getCause = async (id: string): Promise<Cause | undefined> => {
 /**
  * Update an existing cause
  */
-export const updateCause = async (id: string, updates: Partial<Cause>) => {
+export const updateCause = async (id: string, updates: Partial<Cause>, userId?: string, userName?: string) => {
   try {
+    // Check permissions based on what's being updated
+    if (userId) {
+      // If status is being changed, need approval permission
+      if (updates.status && !await canApproveCauses(userId)) {
+        throw new Error('Permission denied: Only Compliance Officers and Platform Admins can change cause status');
+      }
+      
+      // If other fields are being changed, need management permission
+      const hasNonStatusUpdates = Object.keys(updates).some(key => key !== 'status');
+      if (hasNonStatusUpdates && !await canManageCauses(userId)) {
+        throw new Error('Permission denied: Only Waqf Managers can edit cause details');
+      }
+    }
+    
     // First get the full document to get the current version
     const docResult = await getDoc({
       collection: CAUSES_COLLECTION,
@@ -84,6 +119,62 @@ export const updateCause = async (id: string, updates: Partial<Cause>) => {
         version: docResult.version // Include the version for optimistic locking
       }
     });
+    
+    // Log the activity if user info is provided
+    if (userId && userName) {
+      // Check if status was specifically changed to approved or rejected
+      if (updates.status && updates.status !== existing.status) {
+        if (updates.status === 'approved') {
+          await logActivity(
+            'cause_approved',
+            userId,
+            userName,
+            {
+              targetId: id,
+              targetName: existing.name,
+              status: 'approved'
+            }
+          );
+        } else if (updates.status === 'rejected') {
+          await logActivity(
+            'cause_rejected',
+            userId,
+            userName,
+            {
+              targetId: id,
+              targetName: existing.name,
+              status: 'rejected'
+            }
+          );
+        } else {
+          // General status update
+          await logActivity(
+            'cause_updated',
+            userId,
+            userName,
+            {
+              targetId: id,
+              targetName: existing.name,
+              status: updates.status,
+              updatedFields: Object.keys(updates)
+            }
+          );
+        }
+      } else {
+        // General cause update (no status change)
+        await logActivity(
+          'cause_updated',
+          userId,
+          userName,
+          {
+            targetId: id,
+            targetName: existing.name,
+            status: updates.status || existing.status,
+            updatedFields: Object.keys(updates)
+          }
+        );
+      }
+    }
   } catch (error) {
     console.error('Error updating cause:', error);
     throw new Error(`Failed to update cause ${id}`);
@@ -93,21 +184,43 @@ export const updateCause = async (id: string, updates: Partial<Cause>) => {
 /**
  * Delete a cause
  */
-export const deleteCause = async (id: string) => {
+export const deleteCause = async (id: string, userId?: string, userName?: string) => {
   try {
-    // Fetch the cause first to get the full doc for deletion
-    const cause = await getCause(id);
-    if (!cause) {
+    // Check if user has cause management permission (only waqf_manager and platform_admin)
+    if (userId && !await canManageCauses(userId)) {
+      throw new Error('Permission denied: Only Waqf Managers can delete causes');
+    }
+    
+    // Fetch the full document to get both data and version for deletion
+    const docResult = await getDoc({
+      collection: CAUSES_COLLECTION,
+      key: id
+    });
+    
+    if (!docResult) {
       throw new Error('Cause not found');
     }
     
+    const cause = docResult.data as Cause;
+    
     await deleteDoc({
       collection: CAUSES_COLLECTION,
-      doc: {
-        key: id,
-        data: cause
-      }
+      doc: docResult // Pass the full document with version
     });
+    
+    // Log the deletion activity if user info is provided
+    if (userId && userName) {
+      await logActivity(
+        'cause_deleted',
+        userId,
+        userName,
+        {
+          targetId: id,
+          targetName: cause.name,
+          status: cause.status
+        }
+      );
+    }
   } catch (error) {
     console.error('Error deleting cause:', error);
     throw new Error(`Failed to delete cause ${id}`);
@@ -195,9 +308,33 @@ export const deactivateCause = async (id: string) => {
 /**
  * Approve a cause
  */
-export const approveCause = async (id: string) => {
+export const approveCause = async (id: string, userId?: string, userName?: string) => {
   try {
-    await updateCause(id, { status: 'approved', isActive: true });
+    // Check if user has cause approval permission
+    if (userId && !await canApproveCauses(userId)) {
+      throw new Error('Permission denied: Requires cause approval privileges');
+    }
+    
+    const cause = await getCause(id);
+    if (!cause) {
+      throw new Error('Cause not found');
+    }
+    
+    await updateCause(id, { status: 'approved', isActive: true }, userId, userName);
+    
+    // Log the approval activity if user info is provided
+    if (userId && userName) {
+      await logActivity(
+        'cause_approved',
+        userId,
+        userName,
+        {
+          targetId: id,
+          targetName: cause.name,
+          status: 'approved'
+        }
+      );
+    }
   } catch (error) {
     console.error('Error approving cause:', error);
     throw new Error(`Failed to approve cause ${id}`);
@@ -207,9 +344,33 @@ export const approveCause = async (id: string) => {
 /**
  * Reject a cause
  */
-export const rejectCause = async (id: string) => {
+export const rejectCause = async (id: string, userId?: string, userName?: string) => {
   try {
-    await updateCause(id, { status: 'rejected', isActive: false });
+    // Check if user has cause approval permission
+    if (userId && !await canApproveCauses(userId)) {
+      throw new Error('Permission denied: Requires cause approval privileges');
+    }
+    
+    const cause = await getCause(id);
+    if (!cause) {
+      throw new Error('Cause not found');
+    }
+    
+    await updateCause(id, { status: 'rejected', isActive: false }, userId, userName);
+    
+    // Log the rejection activity if user info is provided
+    if (userId && userName) {
+      await logActivity(
+        'cause_rejected',
+        userId,
+        userName,
+        {
+          targetId: id,
+          targetName: cause.name,
+          status: 'rejected'
+        }
+      );
+    }
   } catch (error) {
     console.error('Error rejecting cause:', error);
     throw new Error(`Failed to reject cause ${id}`);
@@ -302,6 +463,60 @@ export const getTopCausesByImpact = async (limit: number = 10): Promise<Cause[]>
   } catch (error) {
     console.error('Error getting top causes by impact:', error);
     throw new Error('Failed to get top causes by impact');
+  }
+};
+
+/**
+ * List pending causes (for admin review)
+ */
+export const listPendingCauses = async (): Promise<Cause[]> => {
+  try {
+    const causes = await listCauses();
+    return causes.filter(cause => cause.status === 'pending');
+  } catch (error) {
+    console.error('Error listing pending causes:', error);
+    throw new Error('Failed to list pending causes');
+  }
+};
+
+/**
+ * List all causes with their approval status (for admin management)
+ */
+export const listAllCausesForAdmin = async (): Promise<Cause[]> => {
+  try {
+    return await listCauses(); // All causes regardless of status
+  } catch (error) {
+    console.error('Error listing all causes for admin:', error);
+    throw new Error('Failed to list all causes for admin');
+  }
+};
+
+/**
+ * List causes by approval status with count information
+ */
+export const getCausesByStatus = async () => {
+  try {
+    const allCauses = await listCauses();
+    const pending = allCauses.filter(c => c.status === 'pending');
+    const approved = allCauses.filter(c => c.status === 'approved');
+    const rejected = allCauses.filter(c => c.status === 'rejected');
+    
+    return {
+      all: allCauses,
+      pending: pending,
+      approved: approved,
+      rejected: rejected,
+      counts: {
+        total: allCauses.length,
+        pending: pending.length,
+        approved: approved.length,
+        rejected: rejected.length,
+        active: approved.filter(c => c.isActive).length
+      }
+    };
+  } catch (error) {
+    console.error('Error getting causes by status:', error);
+    throw new Error('Failed to get causes by status');
   }
 };
 
