@@ -18,9 +18,7 @@ mod allocation_hooks;
 pub mod waqf_types;
 pub mod waqf_hooks;
 
-mod lib {
-    pub mod waqf_utils;
-}
+mod waqf_utils;
 
 // Import all validation hooks
 use crate::admin_hooks::{

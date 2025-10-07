@@ -2,70 +2,33 @@ use serde::{Deserialize, Serialize};
 use junobuild_satellite::{AssertSetDocContext, AssertDeleteDocContext, OnSetDocContext};
 use junobuild_utils::decode_doc_data;
 
-// Cause status enum - should match frontend
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum CauseStatus {
-    #[serde(rename = "draft")]
-    Draft,
-    #[serde(rename = "pending")]
-    Pending,
-    #[serde(rename = "approved")]
-    Approved,
-    #[serde(rename = "rejected")]
-    Rejected,
-    #[serde(rename = "paused")]
-    Paused,
-    #[serde(rename = "completed")]
-    Completed,
-}
+// Note: Frontend uses simple string values for status: "pending" | "approved" | "rejected"
+// No enums needed - validation is done via string matching
 
-// Cause priority enum
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum CausePriority {
-    #[serde(rename = "low")]
-    Low,
-    #[serde(rename = "normal")]
-    Normal,
-    #[serde(rename = "high")]
-    High,
-    #[serde(rename = "urgent")]
-    Urgent,
-}
-
-// Simplified Cause structure for validation
+// Cause structure matching frontend interface
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Cause {
     pub id: String,
-    pub title: String,
+    pub name: String,                    // Frontend uses "name" not "title"
     pub description: String,
+    pub icon: String,                    // Frontend has icon field
+    #[serde(rename = "coverImage")]
+    pub cover_image: Option<String>,     // Frontend optional coverImage
     pub category: String,
-    #[serde(rename = "goalAmount")]
-    pub goal_amount: f64,
-    #[serde(rename = "raisedAmount")]
-    pub raised_amount: Option<f64>,
-    #[serde(rename = "imageUrl")]
-    pub image_url: Option<String>,
-    pub status: CauseStatus,
     #[serde(rename = "isActive")]
     pub is_active: bool,
-    pub priority: Option<CausePriority>,
-    #[serde(rename = "createdBy")]
-    pub created_by: String,
+    pub status: String,                  // Frontend uses string: "pending" | "approved" | "rejected"
+    #[serde(rename = "sortOrder")]
+    pub sort_order: i32,                 // Frontend has sortOrder
+    pub followers: i32,                  // Frontend tracks followers
+    #[serde(rename = "fundsRaised")]
+    pub funds_raised: f64,               // Frontend tracks fundsRaised
+    #[serde(rename = "impactScore")]
+    pub impact_score: Option<f64>,       // Frontend optional impactScore (0-100)
     #[serde(rename = "createdAt")]
-    pub created_at: Option<u64>,
+    pub created_at: String,              // Frontend uses ISO string timestamps
     #[serde(rename = "updatedAt")]
-    pub updated_at: Option<u64>,
-    #[serde(rename = "updatedBy")]
-    pub updated_by: Option<String>,
-    #[serde(rename = "approvedBy")]
-    pub approved_by: Option<String>,
-    #[serde(rename = "approvedAt")]
-    pub approved_at: Option<u64>,
-    pub deleted: Option<bool>,
-    #[serde(rename = "deletedAt")]
-    pub deleted_at: Option<u64>,
-    #[serde(rename = "deletedBy")]
-    pub deleted_by: Option<String>,
+    pub updated_at: String,              // Frontend uses ISO string timestamps
 }
 
 // Cause validation function
@@ -75,12 +38,12 @@ fn validate_cause_data(cause: &Cause) -> std::result::Result<(), String> {
         return Err("Cause ID is required".into());
     }
     
-    if cause.title.trim().is_empty() {
-        return Err("Cause title is required".into());
+    if cause.name.trim().is_empty() {
+        return Err("Cause name is required".into());
     }
     
-    if cause.title.len() > 200 {
-        return Err("Cause title must be 200 characters or less".into());
+    if cause.name.len() > 200 {
+        return Err("Cause name must be 200 characters or less".into());
     }
     
     if cause.description.trim().is_empty() {
@@ -95,91 +58,81 @@ fn validate_cause_data(cause: &Cause) -> std::result::Result<(), String> {
         return Err("Cause category is required".into());
     }
     
-    // 2. Financial validation
-    if cause.goal_amount <= 0.0 {
-        return Err("Goal amount must be positive".into());
+    // 2. Icon field validation
+    if cause.icon.trim().is_empty() {
+        return Err("Cause icon is required".into());
     }
     
-    if cause.goal_amount > 10_000_000.0 {
-        return Err("Goal amount cannot exceed 10 million".into());
+    // 3. Financial validation
+    if cause.funds_raised < 0.0 {
+        return Err("Funds raised cannot be negative".into());
     }
     
-    if let Some(raised) = cause.raised_amount {
-        if raised < 0.0 {
-            return Err("Raised amount cannot be negative".into());
-        }
-        
-        if raised > cause.goal_amount * 1.5 {
-            return Err("Raised amount cannot exceed 150% of goal amount".into());
+    if let Some(score) = cause.impact_score {
+        if score < 0.0 || score > 100.0 {
+            return Err("Impact score must be between 0 and 100".into());
         }
     }
     
-    // 3. Status validation
-    validate_cause_status_transition(cause)?;
+    // 4. Status validation
+    validate_cause_status(&cause.status)?;
     
-    // 4. Image URL validation
-    if let Some(ref url) = cause.image_url {
+    // 5. Cover image URL validation
+    if let Some(ref url) = cause.cover_image {
         if !url.is_empty() && !is_valid_image_url(url) {
-            return Err("Invalid image URL format".into());
+            return Err("Invalid cover image URL format".into());
         }
     }
     
-    // 5. Created by validation
-    if cause.created_by.trim().is_empty() {
-        return Err("Created by field is required".into());
+    // 6. Timestamp validation
+    if cause.created_at.trim().is_empty() {
+        return Err("Created at timestamp is required".into());
+    }
+    
+    if cause.updated_at.trim().is_empty() {
+        return Err("Updated at timestamp is required".into());
     }
     
     Ok(())
 }
 
-// Validate cause status transitions
-fn validate_cause_status_transition(cause: &Cause) -> std::result::Result<(), String> {
-    // Business logic for status transitions
-    match cause.status {
-        CauseStatus::Draft => {
-            // Draft causes should not be active
-            if cause.is_active {
-                return Err("Draft causes cannot be active".into());
-            }
-        },
-        CauseStatus::Pending => {
+// Validate cause status values
+fn validate_cause_status(status: &str) -> std::result::Result<(), String> {
+    let valid_statuses = ["pending", "approved", "rejected"];
+    
+    if !valid_statuses.contains(&status) {
+        return Err(format!(
+            "Invalid cause status '{}'. Valid statuses: {}",
+            status,
+            valid_statuses.join(", ")
+        ));
+    }
+    
+    Ok(())
+}
+
+// Validate cause business rules based on status
+fn validate_cause_status_rules(cause: &Cause) -> std::result::Result<(), String> {
+    match cause.status.as_str() {
+        "pending" => {
             // Pending causes should not be active
             if cause.is_active {
                 return Err("Pending causes cannot be active".into());
             }
         },
-        CauseStatus::Approved => {
+        "approved" => {
             // Approved causes can be active
-            // Should have approval metadata
-            if cause.approved_by.is_none() || cause.approved_at.is_none() {
-                return Err("Approved causes must have approval metadata".into());
-            }
+            // This is the normal state for visible causes
         },
-        CauseStatus::Rejected => {
+        "rejected" => {
             // Rejected causes should not be active
             if cause.is_active {
                 return Err("Rejected causes cannot be active".into());
             }
         },
-        CauseStatus::Paused => {
-            // Paused causes should not be active
-            if cause.is_active {
-                return Err("Paused causes cannot be active".into());
-            }
-        },
-        CauseStatus::Completed => {
-            // Completed causes should not be active
-            if cause.is_active {
-                return Err("Completed causes cannot be active".into());
-            }
-            
-            // Should have reached or be close to goal
-            if let Some(raised) = cause.raised_amount {
-                if raised < cause.goal_amount * 0.8 {
-                    return Err("Completed causes should have raised at least 80% of goal".into());
-                }
-            }
-        },
+        _ => {
+            return Err(format!("Unknown cause status: {}", cause.status));
+        }
     }
     
     Ok(())
@@ -224,15 +177,15 @@ fn validate_cause_permissions(cause: &Cause, _context: &AssertSetDocContext) -> 
     // For now, we'll allow all operations during testing
     // In production, you would check caller permissions based on status changes
     
-    match cause.status {
-        CauseStatus::Approved => {
+    match cause.status.as_str() {
+        "approved" => {
             // Only users with cause_approval permission should be able to approve
             // let caller_permissions = get_caller_permissions(&context.caller).await?;
             // if !caller_permissions.contains(&"cause_approval".to_string()) {
             //     return Err("Only authorized users can approve causes".into());
             // }
         },
-        CauseStatus::Rejected => {
+        "rejected" => {
             // Only users with cause_approval permission should be able to reject
             // Similar check as above
         },
@@ -296,12 +249,15 @@ pub fn assert_cause_operations(context: AssertSetDocContext) -> std::result::Res
     // Validate the cause data structure
     validate_cause_data(&cause)?;
     
+    // Validate cause status business rules
+    validate_cause_status_rules(&cause)?;
+    
     // Business logic validation
     validate_cause_business_rules(&cause, &context)?;
     
     // Log the validation attempt
-    ic_cdk::println!("Cause validation passed: {} - Status: {:?}, Active: {}", 
-                    cause.title, cause.status, cause.is_active);
+    ic_cdk::println!("Cause validation passed: {} - Status: {}, Active: {}", 
+                    cause.name, cause.status, cause.is_active);
     
     Ok(())
 }
@@ -319,15 +275,13 @@ pub fn assert_cause_deletion(context: AssertDeleteDocContext) -> std::result::Re
         return Err("Cannot delete active causes. Pause or complete the cause first.".into());
     }
     
-    if let Some(raised) = cause_to_delete.raised_amount {
-        if raised > 0.0 {
-            return Err("Cannot delete causes that have received donations.".into());
-        }
+    if cause_to_delete.funds_raised > 0.0 {
+        return Err("Cannot delete causes that have received donations.".into());
     }
     
     // Log critical deletion attempt
-    ic_cdk::println!("Cause deletion attempt: {} - Status: {:?}, Raised: {:?}", 
-                    cause_to_delete.title, cause_to_delete.status, cause_to_delete.raised_amount);
+    ic_cdk::println!("Cause deletion attempt: {} - Status: {}, Raised: {}", 
+                    cause_to_delete.name, cause_to_delete.status, cause_to_delete.funds_raised);
     
     Ok(())
 }
@@ -345,25 +299,24 @@ pub fn handle_cause_changes(context: OnSetDocContext) -> std::result::Result<(),
     
     // Enhanced logging for audit purposes
     ic_cdk::println!(
-        "Cause {}: {} - Title: '{}', Status: {:?}, Active: {}, Goal: ${}, Raised: ${:?}", 
+        "Cause {}: {} - Name: '{}', Status: {}, Active: {}, Raised: ${}", 
         operation_type,
         context.data.key,
-        cause_data.title,
+        cause_data.name,
         cause_data.status,
         cause_data.is_active,
-        cause_data.goal_amount,
-        cause_data.raised_amount
+        cause_data.funds_raised
     );
     
     // Log status-specific information
-    match cause_data.status {
-        CauseStatus::Approved => {
-            ic_cdk::println!("IMPORTANT: Cause approved - '{}' by {:?}", 
-                           cause_data.title, cause_data.approved_by);
+    match cause_data.status.as_str() {
+        "approved" => {
+            ic_cdk::println!("IMPORTANT: Cause approved - '{}' (Followers: {}, Raised: ${})", 
+                           cause_data.name, cause_data.followers, cause_data.funds_raised);
         },
-        CauseStatus::Completed => {
-            ic_cdk::println!("SUCCESS: Cause completed - '{}' raised ${:?}", 
-                           cause_data.title, cause_data.raised_amount);
+        "rejected" => {
+            ic_cdk::println!("NOTICE: Cause rejected - '{}'", 
+                           cause_data.name);
         },
         _ => {}
     }

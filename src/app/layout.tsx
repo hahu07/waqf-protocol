@@ -7,9 +7,9 @@ import { Inter, Roboto_Mono } from 'next/font/google';
 import { AuthProvider } from '../components/auth/AuthProvider';
 import { WaqfProvider } from '../providers/WaqfProvider';
 import { Toaster } from 'react-hot-toast';
-import { ScrollProgress } from '@/components/ScrollProgress';
-import { Header } from '@/components/Header';
-import { Footer } from '@/components/Footer';
+import { ScrollProgress } from '@/components/home/ScrollProgress';
+import { Header } from '@/components/home/Header';
+import { Footer } from '@/components/home/Footer';
 import { DevModeSwitcher } from '@/components/DevModeSwitcher';
 import './globals.css';
 

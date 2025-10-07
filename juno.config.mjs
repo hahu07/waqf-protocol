@@ -10,4 +10,15 @@ export default defineConfig({
     source: "out",
     predeploy: ["npm run build"],
   },
+   emulator: {
+    runner: {
+      type: "docker",
+      image: "junobuild/skylab:latest",
+      name: "juno-skylab",
+      volume: "juno",
+      platform: "linux/amd64"
+    },
+    skylab: {
+     }
+  }
 });

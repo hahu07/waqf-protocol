@@ -1,9 +1,9 @@
 'use client';
 
-import { HeroSection } from '@/components/HeroSection';
-import { WaqfFeatures } from '@/components/WaqfFeatures';
-import { HowItWorks } from '@/components/HowItWorks';
-import { Testimonials } from '@/components/Testimonials';
+import { HeroSection } from '@/components/home/HeroSection';
+import { WaqfFeatures } from '@/components/home/WaqfFeatures';
+import { HowItWorks } from '@/components/home/HowItWorks';
+import { Testimonials } from '@/components/home/Testimonials';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
